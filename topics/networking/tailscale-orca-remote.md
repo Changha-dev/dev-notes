@@ -4,7 +4,7 @@
 
 한 줄 요약: Tailscale은 내 기기끼리만 쓰는 사설망을 인터넷 위에 깐다. Orca는 그 사설망 주소로 폰과 노트북을 잇는다. 작업은 전부 노트북에서 돌고, 폰은 리모컨 역할만 한다.
 
-> 도식 버전: [HTML로 보기](https://htmlpreview.github.io/?https://github.com/Changha-dev/dev-notes/blob/main/topics/networking/tailscale-orca-remote.html) ([소스](tailscale-orca-remote.html))
+> 도식 버전: [HTML로 보기](https://changha-dev.github.io/dev-notes/topics/networking/tailscale-orca-remote.html) ([소스](tailscale-orca-remote.html))
 >
 > IP 주소는 예시 값이다. 실제 기기 주소는 공개 레포에 올리지 않는다.
 
