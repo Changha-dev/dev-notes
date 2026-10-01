@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orca × Tailscale 원격 작업</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0}
+/* 레이아웃: 단일 읽기 칼럼(68ch) + 도식은 칼럼보다 살짝 넓게. 망 도면 느낌의 청사진 톤 */
+:root {
+  --bg: #f5f7fb;
+  --surface: #ffffff;
+  --fg: #172033;
+  --muted: #5a6680;
+  --line: #d5dbe8;
+  --accent: #2a55c9;      /* 터널(직접 경로) */
+  --relay: #b7791f;       /* DERP / 중계 경로 */
+  --bad: #c2413b;
+  --good: #23855a;
+  --accent-soft: #e6ecfa;
+  --font-display: "IBM Plex Sans KR", "Apple SD Gothic Neo", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1420; --surface: #161d2c; --fg: #e4e9f3; --muted: #94a0b8; --line: #2a3448;
+  --accent: #7d9cf0; --relay: #e0a94f; --bad: #ef7a73; --good: #5cc28e; --accent-soft: #1d2840;
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0f1420; --surface: #161d2c; --fg: #e4e9f3; --muted: #94a0b8; --line: #2a3448;
+  --accent: #7d9cf0; --relay: #e0a94f; --bad: #ef7a73; --good: #5cc28e; --accent-soft: #1d2840;
+  color-scheme: dark; }
+
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 16px; line-height: 1.7; }
+.wrap { max-width: 860px; margin: 0 auto; padding: 48px 20px 80px; display: grid; gap: 56px; }
+header { display: grid; gap: 12px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(28px, 5vw, 40px); line-height: 1.25; margin: 0; text-wrap: balance; }
+h2 { font-family: var(--font-display); font-weight: 700; font-size: 22px; margin: 0; text-wrap: balance; }
+h3 { font-size: 16px; margin: 0; }
+p { margin: 0; max-width: 68ch; }
+.lede { color: var(--muted); font-size: 17px; }
+section { display: grid; gap: 18px; }
+code, .mono { font-family: var(--font-mono); font-size: .88em; }
+code { background: var(--accent-soft); padding: 1px 6px; border-radius: 4px; }
+
+.figure { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; overflow-x: auto; }
+.figure svg { display: block; width: 100%; min-width: 560px; height: auto; }
+.caption { font-size: 13px; color: var(--muted); }
+
+svg text { font-family: var(--font-body); fill: var(--fg); font-size: 13px; }
+svg .sm { font-size: 11px; fill: var(--muted); }
+svg .mono { font-family: var(--font-mono); font-size: 11px; fill: var(--muted); }
+svg .node { fill: var(--surface); stroke: var(--fg); stroke-width: 1.5; }
+svg .node-soft { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+svg .tunnel { stroke: var(--accent); stroke-width: 3; fill: none; }
+svg .ctrl { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 4 4; fill: none; }
+svg .derp { stroke: var(--relay); stroke-width: 2; stroke-dasharray: 8 5; fill: none; }
+svg .bad { stroke: var(--bad); stroke-width: 2.5; fill: none; }
+svg .fill-accent { fill: var(--accent); }
+svg .fill-relay { fill: var(--relay); }
+svg .fill-bad { fill: var(--bad); }
+svg .fill-good { fill: var(--good); }
+svg .t-accent { fill: var(--accent); font-weight: 600; }
+svg .t-relay { fill: var(--relay); font-weight: 600; }
+svg .t-bad { fill: var(--bad); font-weight: 600; }
+svg .zone { fill: none; stroke: var(--line); stroke-width: 1.5; }
+
+ol.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; counter-reset: s; }
+ol.steps li { counter-increment: s; display: grid; grid-template-columns: 32px 1fr; gap: 12px; }
+ol.steps li::before { content: counter(s); font-family: var(--font-mono); font-weight: 600; color: var(--accent);
+  border: 1.5px solid var(--accent); border-radius: 50%; width: 28px; height: 28px; display: grid; place-items: center; font-size: 13px; }
+ol.steps li > div { min-width: 0; display: grid; gap: 2px; }
+ol.steps p { color: var(--muted); }
+
+.legend { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.sw { width: 24px; height: 0; border-top: 3px solid var(--accent); }
+.sw.ctrl { border-top: 2px dashed var(--muted); }
+.sw.derp { border-top: 2px dashed var(--relay); }
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 14px; }
+th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font-weight: 500; color: var(--muted); font-size: 13px; }
+td:first-child { color: var(--muted); white-space: nowrap; }
+
+.incident { border-left: 3px solid var(--bad); padding: 4px 0 4px 16px; display: grid; gap: 8px; }
+.incident .tag { font-family: var(--font-mono); font-size: 12px; color: var(--bad); letter-spacing: .06em; text-transform: uppercase; }
+
+.checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.check { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 6px; align-content: start; }
+.check p { color: var(--muted); font-size: 14px; }
+.pill { justify-self: start; font-family: var(--font-mono); font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid currentColor; }
+.pill.must { color: var(--bad); }
+.pill.tip { color: var(--good); }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Tailscale · WireGuard · Orca Mobile</div>
+    <h1>밖에서 폰으로 노트북 Orca를 쓰는 원리</h1>
+    <p class="lede">Tailscale은 내 기기끼리만 쓰는 사설망을 인터넷 위에 깐다. Orca는 그 사설망 주소로 폰과 노트북을 잇는다. 작업은 전부 노트북에서 돌고, 폰은 리모컨 역할만 한다.</p>
+  </header>
+
+  <section>
+    <h2>Tailscale은 어떻게 동작하나</h2>
+    <div class="figure">
+      <svg viewBox="0 0 760 380" role="img" aria-label="Tailscale 구조도: 조정 서버는 키와 위치만 전달하고, 데이터는 폰과 노트북 사이 직접 터널 또는 DERP 중계로 흐른다">
+        <!-- 조정 서버 -->
+        <rect class="node-soft" x="280" y="20" width="200" height="62" rx="8"/>
+        <text x="380" y="46" text-anchor="middle" font-weight="600">조정 서버</text>
+        <text x="380" y="66" text-anchor="middle" class="sm">공개키 · 현재 위치만 교환</text>
+        <!-- 제어 경로 -->
+        <path class="ctrl" d="M300 82 L150 150"/>
+        <path class="ctrl" d="M460 82 L610 150"/>
+        <text x="190" y="104" class="sm">키 등록</text>
+        <text x="530" y="104" class="sm">키 등록</text>
+
+        <!-- 폰 측 네트워크 -->
+        <rect class="zone" x="20" y="130" width="240" height="140" rx="10"/>
+        <text x="36" y="152" class="sm">LTE · 카페 Wi-Fi (NAT 뒤)</text>
+        <rect class="node" x="60" y="168" width="160" height="80" rx="10"/>
+        <text x="140" y="196" text-anchor="middle" font-weight="600">아이폰</text>
+        <text x="140" y="216" text-anchor="middle" class="mono">100.101.0.2</text>
+        <text x="140" y="234" text-anchor="middle" class="sm">Orca 앱</text>
+
+        <!-- 노트북 측 네트워크 -->
+        <rect class="zone" x="500" y="130" width="240" height="140" rx="10"/>
+        <text x="516" y="152" class="sm">집 Wi-Fi (공유기 NAT 뒤)</text>
+        <rect class="node" x="540" y="168" width="160" height="80" rx="10"/>
+        <text x="620" y="196" text-anchor="middle" font-weight="600">노트북</text>
+        <text x="620" y="216" text-anchor="middle" class="mono">100.101.0.1</text>
+        <text x="620" y="234" text-anchor="middle" class="sm">utun10 · Orca :6768</text>
+
+        <!-- 직접 터널 -->
+        <path class="tunnel" d="M220 208 L540 208"/>
+        <polygon class="fill-accent" points="540,208 530,202 530,214"/>
+        <polygon class="fill-accent" points="220,208 230,202 230,214"/>
+        <text x="380" y="196" text-anchor="middle" class="t-accent">WireGuard 직접 터널</text>
+        <text x="380" y="228" text-anchor="middle" class="sm">UDP 홀펀칭으로 NAT 통과 · 포트포워딩 불필요</text>
+
+        <!-- DERP 우회 -->
+        <path class="derp" d="M140 248 C140 330, 300 340, 330 340"/>
+        <path class="derp" d="M620 248 C620 330, 460 340, 430 340"/>
+        <rect x="330" y="322" width="100" height="36" rx="8" fill="none" stroke-width="2" style="stroke:var(--relay)"/>
+        <text x="380" y="345" text-anchor="middle" class="t-relay">DERP 중계</text>
+        <text x="380" y="374" text-anchor="middle" class="sm">직접 연결 실패 시 우회 · 암호문만 전달</text>
+      </svg>
+    </div>
+    <div class="legend">
+      <span><i class="sw"></i>실제 데이터 (암호화 터널)</span>
+      <span><i class="sw ctrl"></i>제어 정보만 (키·위치)</span>
+      <span><i class="sw derp"></i>예비 경로 (DERP 중계)</span>
+    </div>
+
+    <ol class="steps">
+      <li><div><h3>기기마다 고정 IP가 붙는다</h3><p>로그인한 기기에 <code>100.x.x.x</code> 주소가 생긴다. 집·카페·LTE 어디로 옮겨도 주소는 같다. 노트북의 <code>utun10</code>이 이 가상 랜카드다.</p></div></li>
+      <li><div><h3>조정 서버는 소개만 한다</h3><p>"아이폰 공개키는 이거고 지금 이 공인 IP:포트에 있다" 같은 정보만 나눠 준다. 작업 내용은 이 서버를 거치지 않는다.</p></div></li>
+      <li><div><h3>NAT를 뚫어 직접 연결한다</h3><p>공유기나 통신사 NAT 뒤에 있어도, 양쪽이 동시에 UDP를 쏘는 방식(홀펀칭)으로 길을 연다.</p></div></li>
+      <li><div><h3>실패하면 DERP로 우회한다</h3><p>홀펀칭이 막힌 망에서는 Tailscale 중계 서버를 거친다. 처음부터 끝까지 암호화돼 있어 중계 서버는 내용을 볼 수 없다.</p></div></li>
+      <li><div><h3>앱은 같은 망에 있다고 착각한다</h3><p>앱이 <code>100.101.0.1</code>으로 접속하면 OS가 그 패킷을 터널로 보낸다. 앱은 Tailscale이 있는지 몰라도 된다.</p></div></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>어디서든 주소가 같은 이유: 주소가 두 겹이다</h2>
+    <p><code>100.x</code>는 사설 IP처럼 동작한다. 정확히는 <code>100.64.0.0/10</code> 대역이다. <code>192.168.x</code>·<code>10.x</code> 같은 일반 사설 대역이 아니라 통신사 내부망(CGNAT)용으로 따로 떼어 둔 대역(RFC 6598)이다. 공인 인터넷에서는 라우팅되지 않아 겹칠 일이 거의 없고, Tailscale이 이 대역을 빌려 쓴다.</p>
+    <div class="figure">
+      <svg viewBox="0 0 760 250" role="img" aria-label="패킷 포장 구조: 안쪽 패킷은 100.x 주소를 쓰고, 이를 암호화해 실제 IP 주소가 적힌 바깥 UDP 패킷에 담는다">
+        <!-- 바깥 봉투 -->
+        <rect x="20" y="20" width="720" height="170" rx="12" fill="none" stroke-width="2" style="stroke:var(--relay)"/>
+        <text x="40" y="46" class="t-relay">바깥 패킷 · 실제 배달 주소 (수시로 바뀜)</text>
+        <text x="40" y="68" class="mono">UDP  192.168.0.10:41641 → 아이폰의 현재 공인 IP:포트</text>
+        <!-- 암호화 층 -->
+        <rect x="40" y="84" width="680" height="92" rx="10" class="node-soft" stroke-dasharray="6 4"/>
+        <text x="60" y="106" class="t-accent">WireGuard 암호화</text>
+        <!-- 안쪽 패킷 -->
+        <rect x="60" y="116" width="640" height="48" rx="8" class="node"/>
+        <text x="80" y="138" font-weight="600">안쪽 패킷 · 앱이 보는 주소 (안 바뀜)</text>
+        <text x="80" y="155" class="mono">100.101.0.1 → 100.101.0.2  ·  Orca 웹소켓 데이터</text>
+        <text x="380" y="218" text-anchor="middle" class="sm">안쪽 주소 = 주민번호 (이사해도 그대로) · 바깥 주소 = 현재 거주지 (우편물은 여기로)</text>
+        <text x="380" y="238" text-anchor="middle" class="sm">중계 서버나 통신사 눈에는 바깥 주소와 암호문만 보인다</text>
+      </svg>
+    </div>
+    <ol class="steps">
+      <li><div><h3>안쪽 주소는 조정 서버가 배정한다</h3><p>처음 로그인할 때 기기 키에 묶어서 하나 주고 서버에 기록한다. Wi-Fi가 바뀌어도 같은 기기 키라 같은 주소를 받는다.</p></div></li>
+      <li><div><h3>바깥 주소는 따라간다</h3><p>기기가 조정 서버에 "지금 여기 있다"를 계속 알린다. 상대 기기도 마지막으로 패킷이 온 주소로 답한다(WireGuard 로밍).</p></div></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>랜카드와 가상 랜카드</h2>
+    <p>랜카드(NIC, 네트워크 인터페이스 카드)는 컴퓨터가 네트워크와 데이터를 주고받는 출입구다. 옛날 PC는 메인보드에 꽂는 카드 부품에 랜선을 꽂아서 이 이름이 붙었다. 지금 맥북에서는 Wi-Fi 칩이 이 역할을 한다. OS 입장에서 랜카드는 이름과 IP가 붙은 출입구 하나이고, 터미널에서 <code>ifconfig</code>를 치면 목록이 나온다.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>이름</th><th>정체</th><th>IP</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">en0</td><td>실물 Wi-Fi 칩</td><td class="mono">192.168.0.10 (공유기가 배정)</td></tr>
+          <tr><td class="mono">lo0</td><td>가상. 자기 자신에게 보내는 출입구</td><td class="mono">127.0.0.1 (localhost)</td></tr>
+          <tr><td class="mono">utun10</td><td>가상. Tailscale 프로그램이 만든 것</td><td class="mono">100.101.0.1</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>가상 랜카드는 하드웨어 없이 소프트웨어로 만든 출입구다. 앱과 OS 눈에는 진짜와 똑같다. 차이는 출구 쪽이다. <code>en0</code>으로 나간 패킷은 Wi-Fi 칩이 전파로 쏘고, <code>utun10</code>으로 나간 패킷은 Tailscale 프로그램이 받아 암호화한 뒤 다시 <code>en0</code>으로 내보낸다. VPN은 전부 이 방식이다.</p>
+    <div class="figure">
+      <svg viewBox="0 0 760 260" role="img" aria-label="노트북 안 패킷 경로: 앱이 보낸 패킷을 OS 라우팅 표가 utun10으로 보내고, Tailscale이 암호화해 en0 Wi-Fi로 내보낸다">
+        <rect class="zone" x="10" y="10" width="600" height="200" rx="12"/>
+        <text x="26" y="32" class="sm">노트북 안</text>
+
+        <rect class="node" x="30" y="50" width="120" height="56" rx="8"/>
+        <text x="90" y="74" text-anchor="middle" font-weight="600">Orca 앱</text>
+        <text x="90" y="94" text-anchor="middle" class="mono">→ 100.101.0.2</text>
+
+        <path d="M150 78 L196 78" style="stroke:var(--fg)" stroke-width="2" fill="none"/>
+        <polygon points="202,78 192,72 192,84" style="fill:var(--fg)"/>
+
+        <rect class="node" x="204" y="44" width="160" height="68" rx="8"/>
+        <text x="284" y="68" text-anchor="middle" font-weight="600">OS 라우팅 표</text>
+        <text x="284" y="86" text-anchor="middle" class="mono">100.64/10 → utun10</text>
+        <text x="284" y="102" text-anchor="middle" class="mono">그 외 → en0</text>
+
+        <path class="tunnel" d="M364 78 L410 78"/>
+        <polygon class="fill-accent" points="416,78 406,72 406,84"/>
+
+        <rect class="node-soft" x="418" y="50" width="172" height="56" rx="8"/>
+        <text x="504" y="74" text-anchor="middle" class="t-accent">utun10 (가상)</text>
+        <text x="504" y="94" text-anchor="middle" class="sm">Tailscale이 받음</text>
+
+        <path class="tunnel" d="M504 106 L504 140"/>
+        <polygon class="fill-accent" points="504,146 498,136 510,136"/>
+        <rect class="node-soft" x="418" y="148" width="172" height="44" rx="8"/>
+        <text x="504" y="175" text-anchor="middle" class="sm" style="fill:var(--accent)">WireGuard 암호화·포장</text>
+
+        <path d="M418 170 L330 170" style="stroke:var(--relay)" stroke-width="2.5" fill="none"/>
+        <polygon class="fill-relay" points="324,170 334,164 334,176"/>
+        <rect class="node" x="204" y="148" width="120" height="44" rx="8"/>
+        <text x="264" y="168" text-anchor="middle" font-weight="600">en0 (실물)</text>
+        <text x="264" y="184" text-anchor="middle" class="sm">Wi-Fi 칩</text>
+
+        <path d="M204 170 C120 170, 80 220, 640 236" class="derp" style="stroke-dasharray:none"/>
+        <polygon class="fill-relay" points="648,237 637,231 637,243"/>
+        <rect x="650" y="210" width="100" height="44" rx="8" fill="none" stroke-width="2" style="stroke:var(--relay)"/>
+        <text x="700" y="230" text-anchor="middle" class="t-relay">인터넷</text>
+        <text x="700" y="246" text-anchor="middle" class="sm">→ 아이폰</text>
+      </svg>
+    </div>
+    <p class="caption">이 노트북에서 <code>netstat -rn</code>과 <code>route get 100.101.0.2</code>로 확인한 실제 경로다. 아이폰 주소를 물으면 OS가 <code>interface: utun10</code>이라고 답한다.</p>
+  </section>
+
+  <section>
+    <h2>Orca는 이 위에서 어떻게 붙나</h2>
+    <div class="figure">
+      <svg viewBox="0 0 760 300" role="img" aria-label="Orca 페어링과 연결 순서: QR에 Tailscale 주소와 토큰이 들어가고, 폰 앱이 그 주소로 웹소켓을 열어 노트북 Orca에 붙는다">
+        <!-- 레인 -->
+        <text x="90" y="24" text-anchor="middle" font-weight="600">아이폰 Orca 앱</text>
+        <text x="290" y="24" text-anchor="middle" font-weight="600">iOS Tailscale</text>
+        <text x="470" y="24" text-anchor="middle" font-weight="600">노트북 utun10</text>
+        <text x="660" y="24" text-anchor="middle" font-weight="600">노트북 Orca :6768</text>
+        <line x1="90" y1="36" x2="90" y2="290" style="stroke:var(--line)" stroke-width="2"/>
+        <line x1="290" y1="36" x2="290" y2="290" style="stroke:var(--line)" stroke-width="2"/>
+        <line x1="470" y1="36" x2="470" y2="290" style="stroke:var(--line)" stroke-width="2"/>
+        <line x1="660" y1="36" x2="660" y2="290" style="stroke:var(--line)" stroke-width="2"/>
+
+        <!-- 1 QR -->
+        <path d="M660 70 L100 70" style="stroke:var(--muted)" stroke-width="1.5" stroke-dasharray="3 4" fill="none"/>
+        <polygon points="96,70 106,65 106,75" style="fill:var(--muted)"/>
+        <text x="380" y="62" text-anchor="middle">① QR 스캔 → 주소 + 기기 토큰 획득</text>
+        <text x="380" y="86" text-anchor="middle" class="mono">ws://100.101.0.1:6768 + token</text>
+
+        <!-- 2 ws open -->
+        <path class="tunnel" d="M90 130 L280 130"/>
+        <polygon class="fill-accent" points="286,130 276,124 276,136"/>
+        <text x="188" y="120" text-anchor="middle" class="sm">② 웹소켓 열기</text>
+
+        <!-- 3 tunnel -->
+        <path class="tunnel" d="M290 150 L460 150"/>
+        <polygon class="fill-accent" points="466,150 456,144 456,156"/>
+        <text x="380" y="140" text-anchor="middle" class="t-accent">③ 암호화 터널</text>
+        <text x="380" y="172" text-anchor="middle" class="sm">LTE에서도 OK</text>
+
+        <path class="tunnel" d="M470 170 L650 170"/>
+        <polygon class="fill-accent" points="656,170 646,164 646,176"/>
+        <text x="565" y="160" text-anchor="middle" class="sm">평문 전달</text>
+
+        <!-- 4 token check -->
+        <rect x="610" y="190" width="100" height="30" rx="6" class="node-soft"/>
+        <text x="660" y="210" text-anchor="middle" class="sm" style="fill:var(--accent)">④ 토큰 검증</text>
+
+        <!-- 5 stream back -->
+        <path d="M660 250 L100 250" style="stroke:var(--good)" stroke-width="3" fill="none"/>
+        <polygon class="fill-good" points="96,250 106,244 106,256"/>
+        <text x="380" y="240" text-anchor="middle" font-weight="600" style="fill:var(--good)">⑤ 터미널 · 에이전트 · 워크트리 화면 스트리밍</text>
+        <text x="380" y="272" text-anchor="middle" class="sm">Claude 실행, git, 빌드는 노트북에서 돈다. 폰은 화면과 입력만 담당</text>
+      </svg>
+    </div>
+    <p class="caption">Orca 설정의 "LAN" 방식이 이 그림이다. "이 컴퓨터의 주소"에서 <code>utun10</code>을 고르면 Tailscale 주소가 QR에 들어간다.</p>
+  </section>
+
+  <section>
+    <h2>오늘 연결이 안 된 이유</h2>
+    <div class="incident">
+      <div class="tag">2026-10-01 · 25초 후 타임아웃</div>
+      <p>노트북은 정상이었다. Orca가 <code>*:6768</code>에서 대기 중이었고 Tailscale 주소도 살아 있었다. 그런데 <code>tailscale status</code>에서 아이폰이 <strong>9일째 offline</strong>이었다. 폰이 터널 밖에 있으니 <code>100.101.0.1</code>으로 가는 패킷이 갈 곳이 없었다.</p>
+    </div>
+    <div class="figure">
+      <svg viewBox="0 0 760 140" role="img" aria-label="실패 구조: 아이폰 Tailscale이 꺼져 있어 터널이 끊기고 노트북에 도달하지 못한다">
+        <rect class="node" x="40" y="30" width="160" height="70" rx="10"/>
+        <text x="120" y="58" text-anchor="middle" font-weight="600">아이폰</text>
+        <text x="120" y="80" text-anchor="middle" class="t-bad" font-size="12">Tailscale OFF</text>
+        <path class="bad" d="M200 65 L340 65"/>
+        <path class="bad" d="M420 65 L560 65" stroke-dasharray="6 6" opacity=".5"/>
+        <g transform="translate(380 65)">
+          <circle r="22" style="fill:var(--surface);stroke:var(--bad)" stroke-width="2.5"/>
+          <path d="M-9 -9 L9 9 M9 -9 L-9 9" class="bad" stroke-width="3"/>
+        </g>
+        <text x="380" y="118" text-anchor="middle" class="sm">100.x 주소로 갈 경로 없음 → 25초 대기 후 에러</text>
+        <rect class="node" x="560" y="30" width="160" height="70" rx="10"/>
+        <text x="640" y="58" text-anchor="middle" font-weight="600">노트북</text>
+        <text x="640" y="80" text-anchor="middle" class="sm" style="fill:var(--good)">:6768 대기 중 · 정상</text>
+      </svg>
+    </div>
+    <p>해결: 폰에서 Tailscale 앱을 열어 VPN을 켜고 QR을 다시 스캔한다. 같은 Wi-Fi라면 주소를 <code>en0</code>으로 바꿔도 된다.</p>
+  </section>
+
+  <section>
+    <h2>LAN + Tailscale과 Orca Relay 비교</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th></th><th>LAN + Tailscale</th><th>Orca Relay</th></tr></thead>
+        <tbody>
+          <tr><td>경로</td><td>내 기기끼리 직접 연결 (P2P)</td><td>Orca 서버가 중계</td></tr>
+          <tr><td>필요한 것</td><td>폰·노트북 모두 Tailscale</td><td>Orca 로그인</td></tr>
+          <tr><td>장점</td><td>외부 서버를 거치지 않음, 지연이 대체로 짧음</td><td>폰에 VPN 불필요</td></tr>
+          <tr><td>단점</td><td>폰 VPN이 꺼지면 연결 불가</td><td>Orca 서버 경유, 아직 베타</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>밖에서 쓰려면</h2>
+    <div class="checks">
+      <div class="check"><span class="pill must">필수</span><h3>노트북이 깨어 있어야 한다</h3><p>덮개를 닫거나 잠자기에 들면 연결이 끊긴다. <code>caffeinate -s</code>나 잠자기 방지 앱을 쓰거나, 늘 켜 둔 맥미니를 호스트로 쓴다.</p></div>
+      <div class="check"><span class="pill must">필수</span><h3>폰 Tailscale이 켜져 있어야 한다</h3><p>오늘 오류의 원인이다. 오래 안 쓰면 iOS가 VPN을 끊거나 로그인이 만료된다.</p></div>
+      <div class="check"><span class="pill tip">권장</span><h3>주문형 VPN 켜기</h3><p>폰 Tailscale 설정에서 VPN On Demand를 켜면 끊겨도 자동으로 다시 붙는다.</p></div>
+    </div>
+  </section>
+</div>
+</body>
+</html>
