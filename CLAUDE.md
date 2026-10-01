@@ -19,7 +19,7 @@ courses/
 topics/
 └── <분야>/               # 예: networking
     ├── <주제>.md         # 강의와 무관한 주제 노트. 번호 없음
-    └── <주제>.html       # 선택. 도식 버전. 완결된 문서(doctype·head 포함)로 두고 md·README에서 htmlpreview 링크로 연결
+    └── <주제>.html       # 선택. 도식 버전. 완결된 문서(doctype·head 포함)로 두고 md·README에서 GitHub Pages 링크(`https://changha-dev.github.io/dev-notes/<경로>`)로 연결
 ```
 
 파일·폴더명은 영문 kebab-case, 문서 제목은 한국어로 쓴다. 한글 파일명은 URL이 퍼센트 인코딩으로 길어지고 macOS 자모 분리(NFD) 문제로 git에서 깨지기 쉽다.
