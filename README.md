@@ -18,7 +18,7 @@
 
 | 분야 | 노트 | 키워드 |
 |---|---|---|
-| 네트워크 | [Tailscale로 밖에서 Orca 쓰기](topics/networking/tailscale-orca-remote.md) | WireGuard, NAT 홀펀칭, CGNAT 대역, TUN 인터페이스 |
+| 네트워크 | [Tailscale로 밖에서 Orca 쓰기](topics/networking/tailscale-orca-remote.md) · [HTML](https://htmlpreview.github.io/?https://github.com/Changha-dev/dev-notes/blob/main/topics/networking/tailscale-orca-remote.html) | WireGuard, NAT 홀펀칭, CGNAT 대역, TUN 인터페이스 |
 
 ### 강의 정리 · `courses/`
 
@@ -39,4 +39,5 @@ dev-notes/
 - 평서체(~다)로 쓴다.
 - 흐름·구조 그림은 Mermaid로 그려 GitHub에서 바로 보이게 한다.
 - 파일명은 영문 kebab-case, 제목은 한국어.
+- 도식이 많은 노트는 같은 이름의 `.html`을 옆에 두고 htmlpreview 링크로 연다. GitHub은 `.html`을 소스로만 보여 준다.
 - 실제 IP·토큰 같은 개인 정보는 예시 값으로 바꿔 올린다.
