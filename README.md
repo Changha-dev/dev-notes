@@ -4,7 +4,7 @@
 
 공부한 것을 내 말로 다시 쓰는 곳
 
-![notes](https://img.shields.io/badge/notes-1-2a55c9?style=flat-square)
+![notes](https://img.shields.io/badge/notes-2-2a55c9?style=flat-square)
 ![lang](https://img.shields.io/badge/lang-한국어-555?style=flat-square)
 ![diagrams](https://img.shields.io/badge/diagrams-Mermaid-ff3670?style=flat-square&logo=mermaid&logoColor=white)
 
@@ -19,6 +19,7 @@
 | 분야 | 노트 | 키워드 |
 |---|---|---|
 | 네트워크 | [Tailscale로 밖에서 Orca 쓰기](topics/networking/tailscale-orca-remote.md) · [HTML](https://changha-dev.github.io/dev-notes/topics/networking/tailscale-orca-remote.html) | WireGuard, NAT 홀펀칭, CGNAT 대역, TUN 인터페이스 |
+| AI 자동화 | [와딩 CX 봇: Discord + Codex로 문의 반자동 처리](topics/ai-automation/warding-cx-bot.md) · [HTML](https://changha-dev.github.io/dev-notes/topics/ai-automation/warding-cx-bot.html) | Codex 파싱, 사람 승인, 판정은 코드, 위임 경계 |
 
 ### 강의 정리 · `courses/`
 

@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>와딩 CX 봇 동작 정리</title>
+<style>
+  :root {
+    --bg: #fafaf7; --surface: #ffffff; --ink: #1d1f23; --muted: #5d6470; --line: #e3e3dc;
+    --accent: #2f6fed; --accent-soft: #e8f0ff; --ok: #1a7f4b; --ok-soft: #e4f5ec;
+    --warn: #b45309; --warn-soft: #fdf1df; --danger: #b42318; --danger-soft: #fde8e6;
+    --code-bg: #f1f1ec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14161a; --surface: #1c1f25; --ink: #e8eaee; --muted: #9aa3b0; --line: #2d323b;
+      --accent: #6c9bff; --accent-soft: #1c2740; --ok: #4cc38a; --ok-soft: #14291f;
+      --warn: #f0a548; --warn-soft: #2d2212; --danger: #ff7b6e; --danger-soft: #34181a;
+      --code-bg: #23272f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14161a; --surface: #1c1f25; --ink: #e8eaee; --muted: #9aa3b0; --line: #2d323b;
+    --accent: #6c9bff; --accent-soft: #1c2740; --ok: #4cc38a; --ok-soft: #14291f;
+    --warn: #f0a548; --warn-soft: #2d2212; --danger: #ff7b6e; --danger-soft: #34181a;
+    --code-bg: #23272f;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.7 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", sans-serif; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 16px 96px; }
+  header h1 { font-size: 1.9rem; line-height: 1.3; margin: 0 0 8px; }
+  header p { color: var(--muted); margin: 0; }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .chip { font-size: .8rem; padding: 3px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+  nav { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 28px 0 8px; padding: 12px 0; border-block: 1px solid var(--line); font-size: .9rem; }
+  nav a { color: var(--muted); text-decoration: none; }
+  nav a:hover { color: var(--accent); }
+  h2 { font-size: 1.35rem; margin: 56px 0 8px; padding-top: 8px; }
+  h2 small { display: block; font-size: .85rem; font-weight: 400; color: var(--muted); margin-top: 2px; }
+  h3 { font-size: 1.05rem; margin: 28px 0 8px; }
+  p { margin: 8px 0; }
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); margin: 16px 0; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .card h3 { margin: 0 0 6px; font-size: 1rem; }
+  .card p { margin: 0; color: var(--muted); font-size: .93rem; }
+  .card .tag { display: inline-block; font-size: .72rem; padding: 1px 8px; border-radius: 999px; margin-bottom: 8px; }
+  .t-ok { background: var(--ok-soft); color: var(--ok); }
+  .t-warn { background: var(--warn-soft); color: var(--warn); }
+  .t-danger { background: var(--danger-soft); color: var(--danger); }
+  .t-acc { background: var(--accent-soft); color: var(--accent); }
+  .diagram { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px; overflow-x: auto; }
+  svg.seq { width: 100%; min-width: 720px; height: auto; color: var(--ink); }
+  .seq .actor { fill: var(--accent-soft); stroke: var(--accent); }
+  .seq .actor-t { fill: var(--ink); font-size: 13px; font-weight: 600; }
+  .seq .life { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 3 5; }
+  .seq .arrow { stroke: var(--ink); stroke-width: 1.8; }
+  .seq .arrow.human { stroke: var(--warn); stroke-width: 2.6; }
+  .seq .arrow.write { stroke: var(--danger); stroke-width: 2.4; }
+  .seq .lbl { fill: var(--ink); font-size: 12.5px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: .85rem; color: var(--muted); margin: 8px 0; }
+  .legend i { display: inline-block; width: 22px; height: 0; border-top: 3px solid; vertical-align: middle; margin-right: 6px; }
+  table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; font-size: .93rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; font-size: .85rem; }
+  tr:last-child td { border-bottom: 0; }
+  .scroll { overflow-x: auto; }
+  code { background: var(--code-bg); padding: 1px 6px; border-radius: 6px; font: .88em ui-monospace, SFMono-Regular, Menlo, monospace; }
+  pre { background: var(--code-bg); border-radius: 12px; padding: 14px 16px; overflow-x: auto; font: .85rem/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; margin: 12px 0; }
+  .timeline { list-style: none; padding: 0; margin: 16px 0; border-left: 2px solid var(--line); }
+  .timeline li { position: relative; padding: 0 0 20px 22px; }
+  .timeline li::before { content: ""; position: absolute; left: -7px; top: 8px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg); }
+  .timeline time { font-size: .8rem; color: var(--muted); display: block; }
+  .timeline b { display: block; }
+  .timeline span { color: var(--muted); font-size: .93rem; }
+  .callout { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 16px 0; }
+  .callout.warn { border-color: var(--warn); background: var(--warn-soft); }
+  .callout p { margin: 4px 0; }
+  .split { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  ul { padding-left: 1.2em; } li { margin: 4px 0; }
+  footer { margin-top: 64px; color: var(--muted); font-size: .85rem; border-top: 1px solid var(--line); padding-top: 16px; }
+  .toggle { float: right; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; cursor: pointer; font-size: .8rem; }
+  @media (max-width: 520px) { header h1 { font-size: 1.5rem; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <button class="toggle" id="theme" aria-label="테마 전환">테마</button>
+  <h1>와딩 CX 봇 동작 정리</h1>
+  <p>선수 솔랭 계정 추가·교체 문의를 Discord + Codex로 반자동 처리한 하루의 기록</p>
+  <div class="meta">
+    <span class="chip">2026-10-07 밤 ~ 10-08 새벽</span>
+    <span class="chip">Node 22 · discord.js · nodemailer</span>
+    <span class="chip">Codex CLI (<code>codex exec</code>)</span>
+    <span class="chip">Claude Code로 조사·설계·구현</span>
+  </div>
+</header>
+
+<nav>
+  <a href="#why">1. 왜 만들었나</a>
+  <a href="#flow">2. 동작 과정</a>
+  <a href="#rules">3. 판정과 차단 규칙</a>
+  <a href="#design">4. 설계 결정</a>
+  <a href="#ai">5. AI 활용 방식</a>
+  <a href="#timeline">6. 작업 타임라인</a>
+  <a href="#trouble">7. 막힌 곳과 해결</a>
+  <a href="#next">8. 한계와 다음 단계</a>
+</nav>
+
+<h2 id="why">1. 왜 만들었나<small>문제 → 접근 → 결과</small></h2>
+<div class="grid">
+  <div class="card"><span class="tag t-danger">문제</span><h3>같은 수작업이 반복된다</h3>
+    <p>앱 문의 폼으로 "선수 계정 추가·교체" 요청이 오면 백오피스에서 선수 조회, Riot 계정 검증, 기존 계정 확인, 부착, 이미지 확인, 안내 메일까지 사람이 순서대로 처리했다.</p></div>
+  <div class="card"><span class="tag t-acc">접근</span><h3>순서가 정해진 일은 템플릿으로</h3>
+    <p>문의가 올라오는 Discord 채널에 봇을 붙였다. 자연어 해석은 Codex에, 조회·판정·쓰기는 코드에 맡기고, 실제 반영은 사람이 ✅ 한 번으로 승인한다.</p></div>
+  <div class="card"><span class="tag t-ok">결과</span><h3>검토만 사람이 한다</h3>
+    <p>문의가 오면 봇이 스레드에 제안과 메일 미리보기를 올린다. 사람은 내용을 보고 ✅만 누르면 부착, 이미지 업로드, 안내 메일 발송이 이어진다.</p></div>
+</div>
+
+<h2 id="flow">2. 동작 과정<small>문의 한 건이 들어와서 끝날 때까지</small></h2>
+<div class="legend">
+  <span><i style="border-color:var(--ink)"></i>읽기·일반 호출</span>
+  <span><i style="border-color:var(--warn)"></i>사람이 하는 단계</span>
+  <span><i style="border-color:var(--danger)"></i>실서비스에 쓰는 단계</span>
+  <span><i style="border-color:var(--ink);border-top-style:dashed"></i>응답</span>
+</div>
+<div class="diagram">
+<svg viewBox="0 0 960 678" role="img" aria-label="CX 봇 동작 시퀀스 다이어그램" class="seq">
+<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker></defs>
+<rect x="28" y="12" width="124" height="40" rx="10" class="actor"/>
+<text x="90" y="34" text-anchor="middle" class="actor-t">Discord</text>
+<line x1="90" y1="52" x2="90" y2="668" class="life"/>
+<rect x="238" y="12" width="124" height="58" rx="10" class="actor"/>
+<text x="300" y="34" text-anchor="middle" class="actor-t">CX 봇</text>
+<text x="300" y="52" text-anchor="middle" class="actor-t">(맥미니)</text>
+<line x1="300" y1="70" x2="300" y2="668" class="life"/>
+<rect x="438" y="12" width="124" height="58" rx="10" class="actor"/>
+<text x="500" y="34" text-anchor="middle" class="actor-t">Codex</text>
+<text x="500" y="52" text-anchor="middle" class="actor-t">(읽기 전용)</text>
+<line x1="500" y1="70" x2="500" y2="668" class="life"/>
+<rect x="638" y="12" width="124" height="58" rx="10" class="actor"/>
+<text x="700" y="34" text-anchor="middle" class="actor-t">와딩 백엔드</text>
+<text x="700" y="52" text-anchor="middle" class="actor-t">admin API</text>
+<line x1="700" y1="70" x2="700" y2="668" class="life"/>
+<rect x="808" y="12" width="124" height="58" rx="10" class="actor"/>
+<text x="870" y="34" text-anchor="middle" class="actor-t">Gmail</text>
+<text x="870" y="52" text-anchor="middle" class="actor-t">SMTP</text>
+<line x1="870" y1="70" x2="870" y2="668" class="life"/>
+<line x1="90" y1="96" x2="300" y2="96" class="arrow " marker-end="url(#ah)"/>
+<text x="195.0" y="88" text-anchor="middle" class="lbl">① 문의 임베드 / 직접 쓴 텍스트</text>
+<line x1="300" y1="142" x2="500" y2="142" class="arrow " marker-end="url(#ah)"/>
+<text x="400.0" y="134" text-anchor="middle" class="lbl">② 원문 전달 (파싱만 요청)</text>
+<line x1="500" y1="188" x2="300" y2="188" class="arrow " stroke-dasharray="6 5" marker-end="url(#ah)"/>
+<text x="400.0" y="180" text-anchor="middle" class="lbl">③ JSON {type, items[], email}</text>
+<line x1="300" y1="234" x2="700" y2="234" class="arrow " marker-end="url(#ah)"/>
+<text x="500.0" y="226" text-anchor="middle" class="lbl">④ 선수 조회 · Riot 검증 (GET)</text>
+<line x1="700" y1="280" x2="300" y2="280" class="arrow " stroke-dasharray="6 5" marker-end="url(#ah)"/>
+<text x="500.0" y="272" text-anchor="middle" class="lbl">⑤ 선수 id · 기존 계정 · 티어</text>
+<line x1="300" y1="326" x2="90" y2="326" class="arrow " marker-end="url(#ah)"/>
+<text x="195.0" y="318" text-anchor="middle" class="lbl">⑥ 스레드 제안 + 메일 미리보기 + ✅❌</text>
+<line x1="90" y1="372" x2="300" y2="372" class="arrow human" marker-end="url(#ah)"/>
+<text x="195.0" y="364" text-anchor="middle" class="lbl">⑦ ✅ 승인 (허용된 사용자만)</text>
+<path d="M300 410 h46 v22 h-46" class="arrow " fill="none" marker-end="url(#ah)"/>
+<text x="356" y="426" class="lbl">⑧ 경기 창 게이트 확인</text>
+<line x1="300" y1="464" x2="700" y2="464" class="arrow write" marker-end="url(#ah)"/>
+<text x="500.0" y="456" text-anchor="middle" class="lbl">⑨ 계정 부착 · 이미지 업로드 (POST)</text>
+<line x1="700" y1="510" x2="300" y2="510" class="arrow " stroke-dasharray="6 5" marker-end="url(#ah)"/>
+<text x="500.0" y="502" text-anchor="middle" class="lbl">⑩ 응답으로 반영 여부 검증</text>
+<line x1="300" y1="556" x2="870" y2="556" class="arrow write" marker-end="url(#ah)"/>
+<text x="585.0" y="548" text-anchor="middle" class="lbl">⑪ 안내 메일 발송</text>
+<line x1="300" y1="602" x2="90" y2="602" class="arrow " marker-end="url(#ah)"/>
+<text x="195.0" y="594" text-anchor="middle" class="lbl">⑫ 결과 로그를 스레드에 남김</text></svg>
+</div>
+<p>⑥까지는 어떤 것도 바꾸지 않는다. 실서비스에 쓰기가 일어나는 건 ⑨(부착, 이미지)와 ⑪(메일)뿐이고, 그 앞에는 반드시 ⑦의 사람 승인과 ⑧의 경기 창 게이트가 있다.</p>
+
+<h3>이미지 처리 (뒤에 추가한 흐름)</h3>
+<ul>
+  <li>제안 단계에서 선수의 이미지가 비어 있으면 스레드에 <code>🖼️ 이미지 없음</code>이 표시된다.</li>
+  <li>허용된 사용자가 그 스레드에 이미지를 올리면 봇이 접수 확인을 답장한다. 형식은 Content-Type이 아니라 파일 앞부분(매직바이트)으로 검사하고 png/jpg/webp, 2MB 이하만 받는다.</li>
+  <li>✅를 누르면 계정 부착과 함께 이미지 업로드 API로 올라간다. 이미지가 이미 있는 선수에게는 아무 표시도 하지 않는다.</li>
+</ul>
+
+<h2 id="rules">3. 판정과 차단 규칙<small>Codex가 아니라 코드가 결정한다</small></h2>
+<div class="scroll"><table>
+  <tr><th>상태</th><th>조건</th><th>✅ 이후 동작</th></tr>
+  <tr><td><code>created</code></td><td>선수의 기존 솔랭 계정이 0개</td><td>부착 → 응답 검증 → 메일("등록을 완료했습니다")</td></tr>
+  <tr><td><code>updated</code></td><td>기존 계정 1개, 요청 계정과 다름</td><td>교체 부착 → 응답 검증 → 메일("정상적으로 수정 완료하였습니다")</td></tr>
+  <tr><td><code>already</code></td><td>요청 계정이 이미 같음</td><td>변경 없음 → 메일("기존에 동일하게 등록되어 있는 상태입니다")</td></tr>
+  <tr><td><code>manual</code></td><td>기존 계정 2개 이상</td><td>자동 진행 안 함. 부착 API가 계정 목록을 통째로 덮어써서 다른 계정이 사라질 수 있기 때문이다.</td></tr>
+</table></div>
+<h3>그 밖에 자동 진행을 막는 경우</h3>
+<ul>
+  <li>이름으로 선수를 한 명으로 특정할 수 없음(동명, 미등록)</li>
+  <li>Riot 계정이 없거나 KR, NA, EUW 어디에도 기록이 없음</li>
+  <li>항목 중 하나라도 위 사유에 걸리면 ✅ 버튼 자체를 달지 않는다(전부 또는 아무것도 아님)</li>
+  <li>경기 창: 진행 중 경기가 있거나 시작 1시간 전부터는 쓰기를 거절한다. 경기 후 ✅를 다시 누르면 재시도된다.</li>
+  <li>이메일이 없으면 부착만 하고 메일은 건너뛴다.</li>
+</ul>
+<pre>// 판정은 이 정도로 단순하다 (logic.js)
+export function decide(accounts, riotId) {
+  if (accounts.some((a) => normId(a.riotId) === normId(riotId))) return 'already';
+  if (accounts.length === 0) return 'created';
+  if (accounts.length === 1) return 'updated';
+  return 'manual';
+}</pre>
+
+<h2 id="design">4. 설계 결정<small>왜 이렇게 나눴나</small></h2>
+<div class="grid">
+  <div class="card"><span class="tag t-acc">역할 분리</span><h3>Codex는 파싱만 한다</h3>
+    <p>문의 원문을 <code>{type, email, items[]}</code> JSON으로 바꾸는 한 번의 호출뿐이다. 읽기 전용 샌드박스에서 돌고 DB, 네트워크, 파일 도구가 없다. 결과는 스키마(<code>--output-schema</code>)로 형식을 강제한다.</p></div>
+  <div class="card"><span class="tag t-acc">결정적 로직은 코드</span><h3>조회·판정·쓰기는 코드</h3>
+    <p>Codex가 엉뚱한 선수를 뽑아도 코드가 DB에서 다시 확인하고 이상하면 수동 처리로 넘긴다. 안전장치가 모델 밖에 있다.</p></div>
+  <div class="card"><span class="tag t-warn">사람 승인</span><h3>쓰기 전에 ✅ 한 번</h3>
+    <p>오부착은 되돌리는 API가 없다. 그래서 자동 승인 대신 제안, 미리보기, 승인의 3단계로 두었다. 승인자는 허용 목록의 사용자만이다.</p></div>
+  <div class="card"><span class="tag t-danger">자격증명 격리</span><h3>admin 토큰은 봇만 갖는다</h3>
+    <p>Codex에는 토큰이 전달되지 않는다. 봇 전용 admin 계정의 리프레시 토큰을 파일(<code>0600</code>)로 보관하고, 사용 때마다 로테이션한다. 문의 원문은 "데이터"로 감싸서 본문 속 지시문을 따르지 않게 했다.</p></div>
+  <div class="card"><span class="tag t-ok">기존 자산 재사용</span><h3>백오피스 API와 메일 문구</h3>
+    <p>새 API를 만들지 않았다. 백오피스가 쓰던 검증·부착·이미지 API를 그대로 호출한다. 메일은 실제로 발송했던 문구를 수집해 템플릿으로 만들었다.</p></div>
+  <div class="card"><span class="tag t-warn">단순함</span><h3>일부러 안 한 것</h3>
+    <p>대기 중인 제안은 메모리에만 두었다(재시작하면 문의를 다시 붙여넣으면 됨). 슬래시 커맨드, 신규 선수 생성은 필요가 확인될 때까지 미뤘다.</p></div>
+</div>
+
+<h2 id="ai">5. AI 활용 방식<small>면접에서 설명할 포인트</small></h2>
+<div class="split">
+  <div class="card"><h3>1) 추측 대신 근거를 모은 뒤 설계</h3>
+    <p>"이전에 어떻게 처리했는지"를 AI가 직접 찾았다. 백오피스 레포의 PR(검증 버튼, 계정 부착), 백엔드 admin API, 운영 DB의 읽기 조회, 브라우저로 열어본 실제 발송 메일에서 기존 절차와 문구를 뽑아 설계의 입력으로 삼았다.</p></div>
+  <div class="card"><h3>2) 계획 → 승인 → 구현 순서</h3>
+    <p>구현 전에 계획 문서를 만들고 사용자가 승인한 뒤 코드를 썼다. 선택지가 갈리는 곳(승인 방식, 토큰 방식, 이미지 범위)은 질문으로 합의했다.</p></div>
+  <div class="card"><h3>3) LLM의 자리를 좁게 잡기</h3>
+    <p>비결정적인 일(자연어 → 구조화)만 모델에 맡기고, 판정·쓰기·메일은 코드로 두었다. 모델이 틀려도 피해가 쓰기까지 번지지 않는 구조다.</p></div>
+  <div class="card"><h3>4) 실측으로 검증</h3>
+    <p>자체 테스트(판정, 경기 창, 메일 렌더링, 이미지 형식), Codex 파싱 실측, SMTP는 발송 없이 로그인만 확인(<code>verify()</code>), 드라이런 모드로 실서비스에 쓰기 없이 전체 흐름 확인 순서로 진행했다.</p></div>
+  <div class="card"><h3>5) 위임 경계는 도구가 막아주기도 했다</h3>
+    <p>운영 계정 권한 부여, 비밀값 저장, 실서비스 스위치(<code>DRY_RUN=0</code>)처럼 위험한 단계는 권한 분류기가 차단했다. 우회하지 않고 사람이 직접 하는 단계로 돌렸고, 그 단계의 명령과 이유는 AI가 정리해 주었다.</p></div>
+  <div class="card"><h3>6) 실수를 인정하고 바로잡기</h3>
+    <p>앱 비밀번호를 옮겨 적다 오타를 낸 것을 인증 실패 후 스스로 대조해 찾아 고쳤다. 비밀값이 대화에 노출된 건 마지막에 폐기·재발급 대상으로 명시해 두었다.</p></div>
+</div>
+<div class="callout">
+  <p><b>한 줄 요약</b> — AI를 "코드를 대신 쓰는 도구"가 아니라 "조사하고, 설계안을 내고, 검증까지 돌리는 동료"로 쓰되, 실서비스에 쓰는 마지막 한 걸음은 사람이 승인하도록 경계를 그었다.</p>
+</div>
+
+<h2 id="timeline">6. 작업 타임라인<small>대략 2시간 남짓, 시간은 근사값</small></h2>
+<ol class="timeline">
+  <li><time>22:30</time><b>요청 정리</b><span>맥미니에 Codex를 두고 Discord로 문의 처리를 자동화하자는 아이디어. 범위를 "선수 솔랭 계정 추가·교체 + 안내 메일"로 좁혔다.</span></li>
+  <li><time>22:40</time><b>기존 방식 조사</b><span>백오피스 레포 PR과 백엔드 API에서 부착·검증 흐름을 확인했다. 연결된 Gmail 커넥터가 다른 계정이라, 브라우저 자동화로 발송 계정의 보낸편지함에서 실제 메일 본문을 수집해 문구 3종을 얻었다.</span></li>
+  <li><time>22:50</time><b>설계 합의와 계획 승인</b><span>승인은 Discord ✅, 봇용 admin 토큰은 리프레시 토큰 방식으로 정했다. 운영 DB 읽기 조회로 봇용 계정 상태를 확인했다.</span></li>
+  <li><time>23:00</time><b>봇 구현과 자체 테스트</b><span>판정, 게이트, 메일 렌더링을 순수 함수로 분리하고 테스트를 붙였다. 샘플 문의로 Codex 파싱을 실측했다.</span></li>
+  <li><time>23:45</time><b>Discord 봇 준비</b><span>봇 앱 생성, 권한 값 계산 후 초대, Message Content Intent 활성화, 프로필 아이콘 제작(로고 벡터에서 날개만 추출).</span></li>
+  <li><time>00:00</time><b>맥미니 설치</b><span>node, codex 설치, 디바이스 인증 로그인, 상시 실행용 LaunchAgent 등록, 설정 파일 작성 후 기동.</span></li>
+  <li><time>00:20</time><b>드라이런 → 실전 전환</b><span>채널 접근 403을 풀고 드라이런으로 전체 흐름을 확인한 뒤 실전 모드로 전환, 안내 메일 도착까지 확인했다.</span></li>
+  <li><time>00:45</time><b>이미지 처리 추가</b><span>"이미지 없음" 표시와 스레드 첨부 업로드를 붙이고 형식·용량 검증 테스트를 추가했다.</span></li>
+</ol>
+
+<h2 id="trouble">7. 막힌 곳과 해결<small>증상 → 원인 → 조치</small></h2>
+<div class="scroll"><table>
+  <tr><th>증상</th><th>원인 파악</th><th>조치</th></tr>
+  <tr><td>봇이 메시지에 반응하지 않고 로그도 없음</td><td>Discord API를 봇 토큰으로 직접 호출해 서버 참가는 정상, 채널 조회만 <code>403 Missing Access</code>임을 확인했다. 이벤트가 아예 안 오는 원인을 코드 문제가 아니라 채널 권한으로 좁혔다.</td><td>해당 채널에 봇의 보기·전송·스레드 권한 추가</td></tr>
+  <tr><td>메일 SMTP <code>535 Username and Password not accepted</code></td><td>일반 계정 비밀번호는 거부된다. 앱 비밀번호로 바꿨는데 또 실패해서 대조해 보니 옮겨 적다 한 글자를 빠뜨린 내 오타였다.</td><td>앱 비밀번호 사용, 오타 수정 후 <code>verify()</code>로 발송 없이 인증만 재확인</td></tr>
+  <tr><td><code>.env</code>가 명령어 한 줄로 덮임</td><td>클립보드에 값이 아니라 직전에 복사한 명령어가 들어 있었다. 값은 노출되지 않았다.</td><td>비밀값은 대화에 붙이지 않고 클립보드나 포털의 복사 버튼으로만 옮기도록 절차 재설계</td></tr>
+  <tr><td>봇을 비공개로 바꾸려 하니 저장 거부</td><td>비공개 앱은 설치 탭의 기본 승인 링크가 "없음"이어야 한다는 포털 오류</td><td>내가 추가로 건드린 설정이라 원래대로 되돌리고 필요한 Intent만 저장</td></tr>
+  <tr><td>"이미지 없음"이 안 뜸</td><td>DB를 읽기 전용으로 확인하니 그 선수는 이미 이미지가 있고 잠금도 걸려 있었다.</td><td>정상 동작. 이미지 없는 선수에게만 표시한다.</td></tr>
+  <tr><td>리프레시 토큰이 로테이션되지 않음</td><td>서버가 같은 토큰을 돌려주는 설계(클라이언트 호환)라서, 대화에 노출된 토큰이 계속 유효하다.</td><td>마무리 때 재로그인으로 새 토큰 발급, 옛 토큰은 서버 쪽에서 정리하는 항목으로 기록</td></tr>
+</table></div>
+
+<h2 id="next">8. 한계와 다음 단계</h2>
+<div class="grid">
+  <div class="card"><span class="tag t-warn">한계</span><h3>지금 안 되는 것</h3>
+    <ul>
+      <li>DB에 없는 선수 신규 생성(생성 API에 소속팀 지정이 없음)</li>
+      <li>팀 이동, 계정 2개 이상 선수의 편집</li>
+      <li>요청 판정(<code>type</code>)이 Codex 의존이라 드물게 놓칠 수 있음</li>
+      <li>봇을 재시작하면 대기 중이던 제안이 사라짐</li>
+    </ul></div>
+  <div class="card"><span class="tag t-acc">다음 후보</span><h3>해볼 만한 것</h3>
+    <ul>
+      <li>팀원 승인 권한 추가(허용 사용자 목록 확장)</li>
+      <li>슬래시 커맨드·멘션 호출</li>
+      <li>"놓침 알림": <code>other</code>로 판정됐지만 계정 형식(<code>이름#태그</code>)이 보이는 문의 표시</li>
+      <li>이미지 후보 자동 검색 + 미리보기 확인</li>
+    </ul></div>
+  <div class="card"><span class="tag t-danger">정리할 것</span><h3>운영 위생</h3>
+    <ul>
+      <li>대화에 붙인 봇 토큰, 앱 비밀번호는 폐기·재발급</li>
+      <li>노출된 admin 리프레시 토큰은 교체</li>
+      <li>코드는 현재 git에 없음 — 저장소에 올릴 위치 결정</li>
+    </ul></div>
+</div>
+
+<footer>
+  이 문서는 공개 저장소용으로 토큰, 채널·사용자 ID, 이메일, 비밀번호를 포함하지 않는다. 작성 2026-10-08.
+</footer>
+
+</div>
+<script>
+  (function () {
+    var root = document.documentElement, btn = document.getElementById('theme');
+    try { var saved = localStorage.getItem('theme'); if (saved) root.setAttribute('data-theme', saved); } catch (e) {}
+    btn.addEventListener('click', function () {
+      var dark = root.getAttribute('data-theme') === 'dark' ||
+        (!root.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      var next = dark ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      try { localStorage.setItem('theme', next); } catch (e) {}
+    });
+  })();
+</script>
+</body>
+</html>
