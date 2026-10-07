@@ -182,6 +182,20 @@
   <li>✅를 누르면 계정 부착과 함께 이미지 업로드 API로 올라간다. 이미지가 이미 있는 선수에게는 아무 표시도 하지 않는다.</li>
 </ul>
 
+<h3>실행 구조: 무엇이 계속 돌고 무엇이 잠깐 도나</h3>
+<div class="scroll"><table>
+<tr><th>구분</th><th>프로세스</th><th>수명</th><th>하는 일</th></tr>
+<tr><td>상주</td><td><code>node bot.js</code></td><td>맥미니 LaunchAgent가 부팅 때 띄우고 죽으면 재기동</td><td>Discord 게이트웨이 연결 유지(WebSocket), 메시지·✅ 이벤트 수신, API 호출, 메일 발송</td></tr>
+<tr><td>일회성</td><td><code>codex exec</code></td><td>문의 1건당 자식 프로세스 1개, JSON을 뱉으면 종료</td><td>원문 → JSON 변환만. 읽기 전용 샌드박스, 토큰 없음</td></tr>
+</table></div>
+<ul>
+  <li>Codex는 감시하지 않는다. 상주하는 건 봇뿐이고, 문의가 없으면 Codex 프로세스도 없다.</li>
+  <li>이벤트 기반이라 폴링이 없다. 메시지가 오면 <code>messageCreate</code>, ✅가 눌리면 <code>messageReactionAdd</code> 핸들러가 돈다.</li>
+  <li>Codex 호출은 stdin으로 프롬프트를 넘기고 <code>--output-schema</code>로 JSON 형태를 강제해 결과 파일로 받는다. 문의 1건이 Plus 사용량 1회를 쓴다.</li>
+  <li>admin 액세스 토큰(30분)은 봇이 리프레시 토큰으로 필요할 때 갱신한다. 리프레시 토큰은 0600 파일에만 있다.</li>
+  <li>대기 중인 제안은 봇 메모리에만 있다. 재시작하면 사라져서 문의를 다시 올려야 한다.</li>
+</ul>
+
 <h2 id="rules">3. 판정과 차단 규칙<small>Codex가 아니라 코드가 결정한다</small></h2>
 <div class="scroll"><table>
   <tr><th>상태</th><th>조건</th><th>✅ 이후 동작</th></tr>
